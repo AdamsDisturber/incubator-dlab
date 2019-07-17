@@ -308,6 +308,7 @@ public class RequestBuilder {
 		return newResourceSysBaseDTO(userInfo, ExploratoryGitCredsUpdateDTO.class)
 				.withNotebookImage(instanceDTO.getImageName())
 				.withApplicationName(getApplicationNameFromImage(instanceDTO.getImageName()))
+				.withProject(instanceDTO.getProject())
 				.withNotebookInstanceName(instanceDTO.getExploratoryId())
 				.withExploratoryName(instanceDTO.getExploratoryName())
 				.withGitCreds(exploratoryGitCredsDTO.getGitCreds());
@@ -321,6 +322,7 @@ public class RequestBuilder {
 				.withApplicationName(getApplicationNameFromImage(userInstance.getImageName()))
 				.withNotebookInstanceName(userInstance.getExploratoryId())
 				.withExploratoryName(userInstance.getExploratoryName())
+				.withProject(userInstance.getProject())
 				.withLibs(libs);
 	}
 
@@ -330,6 +332,7 @@ public class RequestBuilder {
 		checkInappropriateCloudProviderOrElseThrowException();
 		return (T) newResourceSysBaseDTO(userInfo, ExploratoryActionDTO.class)
 				.withNotebookInstanceName(userInstance.getExploratoryId())
+				.withProject(userInstance.getProject())
 				.withNotebookImage(userInstance.getImageName())
 				.withApplicationName(getApplicationNameFromImage(userInstance.getImageName()))
 				.withExploratoryName(userInstance.getExploratoryName());
@@ -344,6 +347,7 @@ public class RequestBuilder {
 				.withComputationalId(computationalResource.getComputationalId())
 				.withComputationalName(computationalResource.getComputationalName())
 				.withExploratoryName(userInstance.getExploratoryName())
+				.withProject(userInstance.getProject())
 				.withComputationalImage(computationalResource.getImageName())
 				.withApplicationName(getApplicationNameFromImage(userInstance.getImageName()))
 				.withLibs(libs);
@@ -358,6 +362,7 @@ public class RequestBuilder {
 		checkInappropriateCloudProviderOrElseThrowException();
 		return (T) newResourceSysBaseDTO(userInfo, LibListComputationalDTO.class)
 				.withComputationalId(computationalResource.getComputationalId())
+				.withProject(userInstance.getProject())
 				.withComputationalImage(computationalResource.getImageName())
 				.withLibCacheKey(ExploratoryLibCache.libraryCacheKey(userInstance))
 				.withApplicationName(getApplicationNameFromImage(userInstance.getImageName()));
@@ -463,7 +468,8 @@ public class RequestBuilder {
 																		String exploratoryId,
 																		String computationalName,
 																		String computationalId,
-																		DataEngineType dataEngineType, String project) {
+																		DataEngineType dataEngineType,
+																		String project) {
 		T computationalTerminate;
 
 		switch (cloudProvider()) {
@@ -526,6 +532,7 @@ public class RequestBuilder {
 																	   String imageName) {
 		checkInappropriateCloudProviderOrElseThrowException();
 		return (T) newResourceSysBaseDTO(userInfo, ExploratoryImageDTO.class)
+				.withProject(userInstance.getProject())
 				.withNotebookInstanceName(userInstance.getExploratoryId())
 				.withExploratoryName(userInstance.getExploratoryName())
 				.withApplicationName(getApplicationNameFromImage(userInstance.getImageName()))
@@ -544,7 +551,8 @@ public class RequestBuilder {
 				.withApplicationName(getApplicationNameFromImage(exploratory.getImageName()))
 				.withNotebookImageName(exploratory.getImageName())
 				.withImage(cr.getImageName())
-				.withComputationalId(cr.getComputationalId());
+				.withComputationalId(cr.getComputationalId())
+				.withProject(exploratory.getProject());
 	}
 
 
@@ -607,7 +615,8 @@ public class RequestBuilder {
 		dto.withNotebookInstanceName(userInstance.getExploratoryId())
 				.withNotebookImage(userInstance.getImageName())
 				.withExploratoryName(userInstance.getExploratoryName())
-				.withReuploadKeyRequired(userInstance.isReuploadKeyRequired());
+				.withReuploadKeyRequired(userInstance.isReuploadKeyRequired())
+				.withProject(userInstance.getProject());
 		return dto;
 	}
 
