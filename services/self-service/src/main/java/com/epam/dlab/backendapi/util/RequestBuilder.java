@@ -20,7 +20,7 @@
 package com.epam.dlab.backendapi.util;
 
 import com.epam.dlab.auth.UserInfo;
-import com.epam.dlab.backendapi.SelfServiceApplicationConfiguration;
+import com.epam.dlab.backendapi.conf.SelfServiceApplicationConfiguration;
 import com.epam.dlab.backendapi.dao.SettingsDAO;
 import com.epam.dlab.backendapi.domain.ExploratoryLibCache;
 import com.epam.dlab.backendapi.domain.ProjectDTO;
@@ -60,6 +60,7 @@ import com.epam.dlab.dto.gcp.computational.SparkComputationalCreateGcp;
 import com.epam.dlab.dto.gcp.edge.EdgeCreateGcp;
 import com.epam.dlab.dto.gcp.exploratory.ExploratoryCreateGcp;
 import com.epam.dlab.dto.gcp.keyload.UploadFileGcp;
+import com.epam.dlab.dto.project.ProjectActionDTO;
 import com.epam.dlab.dto.project.ProjectCreateDTO;
 import com.epam.dlab.dto.reuploadkey.ReuploadKeyDTO;
 import com.epam.dlab.exceptions.DlabException;
@@ -96,7 +97,17 @@ public class RequestBuilder {
 						.confTagResourceId(settingsDAO.getConfTagResourceId())
 						.awsNotebookSubnetId(settingsDAO.getAwsNotebookSubnetId())
 						.awsNotebookVpcId(settingsDAO.getAwsNotebookVpcId())
-						.awsIamUser(userInfo.getName()).build();
+						.awsIamUser(userInfo.getName())
+						.zone(settingsDAO.getAwsZone())
+						.ldapDn(settingsDAO.getLdapDn())
+						.ldapHost(settingsDAO.getLdapHost())
+						.ldapOu(settingsDAO.getLdapOu())
+						.ldapUser(settingsDAO.getLdapUser())
+						.ldapPassword(settingsDAO.getLdapPassword())
+						.sbn(settingsDAO.getServiceBaseName())
+						.cloud(configuration.getCloudProvider().getName())
+						.os(settingsDAO.getConfOsFamily())
+						.build();
 			case AZURE:
 				return AzureCloudSettings.builder()
 						.azureRegion(settingsDAO.getAzureRegion())
@@ -637,6 +648,11 @@ public class RequestBuilder {
 				.tag(projectDTO.getTag())
 				.endpoint(projectDTO.getEndpoints().iterator().next()) //TODO figure out how to deal with endpoints
 				.build()
+				.withCloudSettings(cloudSettings(userInfo));
+	}
+
+	public ProjectActionDTO newProjectAction(UserInfo userInfo, String project, String endpoint) {
+		return new ProjectActionDTO(project, endpoint)
 				.withCloudSettings(cloudSettings(userInfo));
 	}
 

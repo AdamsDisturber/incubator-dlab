@@ -19,10 +19,8 @@
 
 package com.epam.dlab.backendapi.modules;
 
-import com.epam.dlab.auth.SecurityFactory;
 import com.epam.dlab.backendapi.SelfServiceApplication;
-import com.epam.dlab.backendapi.SelfServiceApplicationConfiguration;
-import com.epam.dlab.backendapi.auth.SelfServiceSecurityAuthenticator;
+import com.epam.dlab.backendapi.conf.SelfServiceApplicationConfiguration;
 import com.epam.dlab.backendapi.dao.BillingDAO;
 import com.epam.dlab.backendapi.dao.KeyDAO;
 import com.epam.dlab.backendapi.dao.gcp.GcpBillingDao;
@@ -41,7 +39,6 @@ import com.fiestacabin.dropwizard.quartz.SchedulerConfiguration;
 import com.google.inject.Injector;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
-import io.dropwizard.auth.Authorizer;
 import io.dropwizard.setup.Environment;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
@@ -63,8 +60,6 @@ public class GcpSelfServiceModule extends CloudModule {
 		if (injector.getInstance(SelfServiceApplicationConfiguration.class).isGcpOuauth2AuthenticationEnabled()) {
 			environment.jersey().register(injector.getInstance(GcpOauthResource.class));
 		}
-		injector.getInstance(SecurityFactory.class).configure(injector, environment,
-				SelfServiceSecurityAuthenticator.class, injector.getInstance(Authorizer.class));
 
 	}
 

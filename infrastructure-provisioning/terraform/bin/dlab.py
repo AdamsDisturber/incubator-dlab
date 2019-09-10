@@ -118,8 +118,14 @@ class ParamsBuilder:
         self.__params = []
 
     def add(self, arg_type, name, desc, **kwargs):
+        default_group = ['all_args']
+        if isinstance(kwargs.get('group'), str):
+            default_group.append(kwargs.get('group'))
+        if isinstance(kwargs.get('group'), (list, tuple)):
+            default_group.extend(kwargs.get('group'))
+
         parameter = {
-            'group': kwargs.get('group'),
+            'group': default_group,
             'name': name,
             'props': {
                 'help': desc,
@@ -136,6 +142,9 @@ class ParamsBuilder:
 
     def add_str(self, name, desc, **kwargs):
         return self.add(str, name, desc, **kwargs)
+
+    def add_bool(self, name, desc, **kwargs):
+        return self.add(bool, name, desc, **kwargs)
 
     def add_int(self, name, desc, **kwargs):
         return self.add(int, name, desc, **kwargs)
@@ -155,11 +164,16 @@ class Console:
         Returns:
             str: command result
         """
-        p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT, universal_newlines=True)
-        for line in p.stdout.readlines():
-            print(line)
-            if 'error' in line.lower():
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT,
+                                   universal_newlines=True)
+
+        while True:
+            nextline = process.stdout.readline()
+            print(nextline)
+            if nextline == '' and process.poll() is not None:
+                break
+            if 'error' in nextline.lower():
                 sys.exit(0)
 
     @staticmethod
@@ -201,6 +215,10 @@ class TerraformProviderError(Exception):
 
 
 class TerraformProvider:
+
+    def __init__(self, no_color=False):
+        self.no_color = '-no-color' if no_color else ''
+
     def initialize(self):
         """Initialize terraform
 
@@ -211,7 +229,8 @@ class TerraformProvider:
         """
         logging.info('terraform init')
         terraform_success_init = 'Terraform has been successfully initialized!'
-        terraform_init_result = Console.execute('terraform init')
+        command = 'terraform init {}'.format(self.no_color)
+        terraform_init_result = Console.execute(command)
         logging.info(terraform_init_result)
         if terraform_success_init not in terraform_init_result:
             raise TerraformProviderError(terraform_init_result)
@@ -227,13 +246,13 @@ class TerraformProvider:
         """
         logging.info('terraform validate')
         terraform_success_validate = 'Success!'
-        terraform_validate_result = Console.execute('terraform validate')
+        terraform_validate_result = Console.execute(
+            'terraform validate {}'.format(self.no_color))
         logging.info(terraform_validate_result)
         if terraform_success_validate not in terraform_validate_result:
             raise TerraformProviderError(terraform_validate_result)
 
-    @staticmethod
-    def apply(tf_params, cli_args):
+    def apply(self, tf_params, cli_args):
         """Run terraform
 
         Args:
@@ -246,13 +265,12 @@ class TerraformProvider:
 
         args_str = get_var_args_string(cli_args)
         params_str = get_args_string(tf_params)
-        command = ('terraform apply -auto-approve {} {}'
-                   .format(params_str, args_str))
+        command = ('terraform apply -auto-approve {} {} {}'
+                   .format(self.no_color, params_str, args_str))
         logging.info(command)
         Console.execute_to_command_line(command)
 
-    @staticmethod
-    def destroy(tf_params, cli_args):
+    def destroy(self, tf_params, cli_args):
         """Destroy terraform
 
         Args:
@@ -264,8 +282,8 @@ class TerraformProvider:
         logging.info('terraform destroy')
         args_str = get_var_args_string(cli_args)
         params_str = get_args_string(tf_params)
-        command = ('terraform destroy -auto-approve {} {}'
-                   .format(params_str, args_str))
+        command = ('terraform destroy -auto-approve {} {} {}'
+                   .format(self.no_color, params_str, args_str))
         logging.info(command)
         Console.execute_to_command_line(command)
         state_file = tf_params['-state']
@@ -295,6 +313,7 @@ class AbstractDeployBuilder:
 
         args = self.parse_args()
         self.service_args = args.get('service')
+        self.no_color = self.service_args.get('no_color')
         state_dir = self.service_args.get('state')
         if not state_dir:
             self.output_dir = None
@@ -307,8 +326,8 @@ class AbstractDeployBuilder:
                 self.output_dir = (os.path.join(state_dir, service_name))
                 self.tf_output = os.path.join(self.output_dir, 'output.json')
                 self.tf_params = {
-                    '-state': os.path.join(self.output_dir,
-                                           '{}.tfstate'.format(self.name))
+                    '-state': os.path.join(
+                        self.output_dir, '{}.tfstate'.format(self.name))
                 }
             else:
                 sys.stdout.write('path doesn\'t exist')
@@ -373,15 +392,15 @@ class AbstractDeployBuilder:
         return False
 
     def apply(self):
-        terraform = TerraformProvider()
+        terraform = TerraformProvider(self.no_color)
         terraform.apply(self.tf_params, self.terraform_args)
 
     def destroy(self):
-        terraform = TerraformProvider()
+        terraform = TerraformProvider(self.no_color)
         terraform.destroy(self.tf_params, self.terraform_args)
 
     def store_output_to_file(self):
-        terraform = TerraformProvider()
+        terraform = TerraformProvider(self.no_color)
         output = terraform.output(self.tf_params, '-json')
         output = {key: value.get('value')
                   for key, value in json.loads(output).items()}
@@ -455,7 +474,7 @@ class AbstractDeployBuilder:
         """
         self.validate_params()
         tf_location = self.terraform_location
-        terraform = TerraformProvider()
+        terraform = TerraformProvider(self.no_color)
         os.chdir(tf_location)
         try:
             terraform.initialize()
@@ -509,18 +528,24 @@ class AWSK8sSourceBuilder(AbstractDeployBuilder):
 
     def validate_params(self):
         super(AWSK8sSourceBuilder, self).validate_params()
-        params = self.parse_args()[self.terraform_args_group_name]
+        params = self.parse_args()['all_args']
         if params.get('ssn_k8s_masters_count', 1) < 1:
             sys.stderr.write('ssn_k8s_masters_count should be greater then 0')
             sys.exit(1)
         if params.get('ssn_k8s_workers_count', 3) < 3:
             sys.stderr.write('ssn_k8s_masters_count should be minimum 3')
             sys.exit(1)
+        # Temporary condition for Jenkins job
+        if 'endpoint_id' in params and len(params.get('endpoint_id')) > 12:
+            sys.stderr.write('endpoint_id length should be less then 12')
+            sys.exit(1)
 
     @property
     def cli_args(self):
         params = ParamsBuilder()
         (params
+         .add_bool('--no_color', 'no color console_output', group='service',
+                   default=False)
          .add_str('--state', 'State file path', group='service')
          .add_str('--access_key_id', 'AWS Access Key ID', required=True,
                   group='k8s')
@@ -537,13 +562,15 @@ class AWSK8sSourceBuilder(AbstractDeployBuilder):
          .add_str('--pkey', 'path to key', required=True, group='service')
          .add_str('--region', 'Name of AWS region.', default='us-west-2',
                   group=('k8s', 'helm_charts'))
-         .add_str('--secret_access_key', 'AWS Secret Access Key', required=True,
+         .add_str('--secret_access_key', 'AWS Secret Access Key',
+                  required=True,
                   group='k8s')
          .add_str('--service_base_name',
                   'Any infrastructure value (should be unique if '
                   'multiple SSN\'s have been deployed before).',
                   default='k8s', group=('k8s', 'helm_charts'))
-         .add_int('--ssn_k8s_masters_count', 'Count of K8S masters.', default=3,
+         .add_int('--ssn_k8s_masters_count', 'Count of K8S masters.',
+                  default=3,
                   group='k8s')
          .add_int('--ssn_k8s_workers_count', 'Count of K8S workers', default=2,
                   group=('k8s', 'helm_charts'))
@@ -602,12 +629,15 @@ class AWSK8sSourceBuilder(AbstractDeployBuilder):
                   default='user:tag', group=('k8s', 'helm_charts'))
          .add_str('--additional_tag', 'Additional tag.',
                   default='product:dlab', group='k8s')
-         .add_str('--billing_bucket', 'Billing bucket name', group='helm_charts')
+         .add_str('--billing_bucket', 'Billing bucket name',
+                  group='helm_charts')
          .add_str('--billing_bucket_path',
-                  'The path to billing reports directory in S3 bucket', default='',
+                  'The path to billing reports directory in S3 bucket',
+                  default='',
                   group='helm_charts')
          .add_str('--billing_aws_job_enabled',
-                  'Billing format. Available options: true (aws), false(epam)', default='false',
+                  'Billing format. Available options: true (aws), false(epam)',
+                  default='false',
                   group='helm_charts')
          .add_str('--billing_aws_account_id',
                   'The ID of Amazon account', default='',
@@ -644,7 +674,11 @@ class AWSK8sSourceBuilder(AbstractDeployBuilder):
                   'Column name in report file that contains tags',
                   default='line_item_operation,line_item_line_item_description',
                   group='helm_charts')
-         .add_str('--billing_tag', 'Billing tag', default='dlab', group='helm_charts')
+         .add_str('--billing_tag', 'Billing tag', default='dlab',
+                  group='helm_charts')
+         # Tmp for jenkins job
+         .add_str('--endpoint_id', 'Endpoint Id',
+                  default='user:tag', group=())
          )
         return params.build()
 
@@ -701,7 +735,7 @@ class AWSK8sSourceBuilder(AbstractDeployBuilder):
                 time.sleep(60)
 
     def select_master_ip(self):
-        terraform = TerraformProvider()
+        terraform = TerraformProvider(self.no_color)
         output = terraform.output(self.tf_params,
                                   '-json ssn_k8s_masters_ip_addresses')
         ips = json.loads(output)
@@ -722,7 +756,7 @@ class AWSK8sSourceBuilder(AbstractDeployBuilder):
     def run_remote_terraform(self):
         logging.info('apply helm charts')
         args = self.parse_args()
-        dns_name = json.loads(TerraformProvider()
+        dns_name = json.loads(TerraformProvider(self.no_color)
                               .output(self.tf_params,
                                       '-json ssn_k8s_alb_dns_name'))
         logging.info('apply ssn-helm-charts')
@@ -743,16 +777,20 @@ class AWSK8sSourceBuilder(AbstractDeployBuilder):
 
     def output_terraform_result(self):
         dns_name = json.loads(
-            TerraformProvider().output(self.tf_params,
-                                       '-json ssn_k8s_alb_dns_name'))
+            TerraformProvider(self.no_color).output(self.tf_params,
+                                                    '-json ssn_k8s_alb_dns_name'))
         ssn_bucket_name = json.loads(
-            TerraformProvider().output(self.tf_params, '-json ssn_bucket_name'))
+            TerraformProvider(self.no_color).output(self.tf_params,
+                                                    '-json ssn_bucket_name'))
         ssn_k8s_sg_id = json.loads(
-            TerraformProvider().output(self.tf_params, '-json ssn_k8s_sg_id'))
+            TerraformProvider(self.no_color).output(self.tf_params,
+                                                    '-json ssn_k8s_sg_id'))
         ssn_subnet = json.loads(
-            TerraformProvider().output(self.tf_params, '-json ssn_subnet'))
+            TerraformProvider(self.no_color).output(self.tf_params,
+                                                    '-json ssn_subnet'))
         ssn_vpc_id = json.loads(
-            TerraformProvider().output(self.tf_params, '-json ssn_vpc_id'))
+            TerraformProvider(self.no_color).output(self.tf_params,
+                                                    '-json ssn_vpc_id'))
 
         logging.info("""
         DLab SSN K8S cluster has been deployed successfully!
@@ -796,7 +834,8 @@ class AWSK8sSourceBuilder(AbstractDeployBuilder):
     def deploy(self):
         logging.info('deploy')
         output = ' '.join(
-            TerraformProvider().output(self.tf_params, '-json').split())
+            TerraformProvider(self.no_color).output(self.tf_params,
+                                                    '-json').split())
         self.fill_args_from_dict(json.loads(output))
         self.select_master_ip()
         self.add_ip_to_known_hosts(self.ip)
@@ -849,8 +888,11 @@ class AWSEndpointBuilder(AbstractDeployBuilder):
     def cli_args(self):
         params = ParamsBuilder()
         (params
+         .add_bool('--no_color', 'no color console_output', group='service',
+                   default=False)
          .add_str('--state', 'State file path', group='service')
-         .add_str('--secret_access_key', 'AWS Secret Access Key', required=True,
+         .add_str('--secret_access_key', 'AWS Secret Access Key',
+                  required=True,
                   group='endpoint')
          .add_str('--access_key_id', 'AWS Access Key ID', required=True,
                   group='endpoint')
@@ -861,7 +903,8 @@ class AWSEndpointBuilder(AbstractDeployBuilder):
                   group='endpoint')
          .add_str('--vpc_id', 'ID of AWS VPC if you already have VPC created.',
                   group='endpoint')
-         .add_str('--vpc_cidr', 'CIDR for VPC creation. Conflicts with vpc_id.',
+         .add_str('--vpc_cidr',
+                  'CIDR for VPC creation. Conflicts with vpc_id.',
                   default='172.31.0.0/16', group='endpoint')
          .add_str('--ssn_subnet',
                   'ID of AWS Subnet if you already have subnet created.',
